@@ -19,8 +19,6 @@ This web app detects objects in uploaded images, displays them with bounding box
 
 **5. Responsive Design:**
    * The layout is designed to be responsive, adapting to different screen sizes.
-   * Enhanced Bounding Box Styling:
-   * The bounding box and label are now styled with an amber color, improving visibility.
 
 **6. Clear instructions:**
    * Added a paragraph explaining how to use the web application.
