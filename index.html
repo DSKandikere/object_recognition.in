@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Object Recognition</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 60px;
+            background: linear-gradient(135deg, #f0f4c3, #c8e6c9); /* Soft pastel gradient */
+            font-family: 'Montserrat', sans-serif;
+            color: #37474f; /* Dark grey-blue */
+        }
+
+        .upload-area {
+            border: 2px dashed #a5d6a7; /* Light green dashed border */
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            border-radius: 12px;
+            transition: border-color 0.3s ease, background-color 0.3s ease;
+            width: 350px;
+            margin-bottom: 40px;
+            background-color: rgba(255, 255, 255, 0.8);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .upload-area:hover {
+            border-color: #66bb6a;
+            background-color: rgba(255, 255, 255, 0.9);
+        }
+
+        #file-upload {
+            display: none;
+        }
+
+        #image-container {
+            position: relative;
+            max-width: 800px;
+            width: 100%;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.15);
+            margin-top: 30px;
+            background-color: white;
+        }
+
+        #image-container img {
+            display: block;
+            width: 100%;
+            height: auto;
+        }
+
+        .bounding-box {
+            position: absolute;
+            border: 3px solid #ffab40; /* Amber bounding box */
+            box-sizing: border-box;
+        }
+
+        .bounding-box-label {
+            background-color: #ffab40;
+            color: white;
+            padding: 6px 12px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            font-size: 15px;
+            border-radius: 0 12px 0 0;
+            font-weight: 600;
+        }
+
+        #status {
+            margin-top: 40px;
+            font-weight: 600;
+            color: #546e7a; /* Grey-blue */
+            text-align: center;
+            font-size: 18px;
+        }
+
+        h1 {
+            color: #3e2723; /* Dark brown */
+            text-align: center;
+            font-size: 42px;
+            margin-bottom: 15px;
+        }
+
+        p {
+            text-align: center;
+            color: #607d8b; /* Blue-grey */
+            font-size: 20px;
+            margin-bottom: 50px;
+        }
+
+        #feedback-container {
+            margin-top: 30px;
+            text-align: center;
+        }
+
+        #feedback-container button {
+            padding: 12px 25px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        #feedback-container button:first-child {
+            background-color: #81c784; /* Light green */
+            color: white;
+        }
+
+        #feedback-container button:last-child {
+            background-color: #e57373; /* Light red */
+            color: white;
+        }
+
+        #feedback-container button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.2);
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <h1>Object Recognition</h1>
+
+    <p>Upload or drag an image to analyze its contents:</p>
+
+    <div class="upload-area" id="upload-area">
+        <span>Choose an image file</span>
+        <input id="file-upload" type="file" accept="image/*" />
+    </div>
+
+    <div id="image-container"></div>
+    <div id="status"></div>
+<p>Is the object recognised correctly ?</p>
+    <div id="feedback-container"></div>
+
+    <script type="module">
+        
+        import { pipeline, env } from "https://cdn.jsdelivr.net/npm/@xenova/transformers@2.6.0";
+        env.allowLocalModels = false;
+
+        const fileUpload = document.getElementById('file-upload');
+        const imageContainer = document.getElementById('image-container');
+        const status = document.getElementById('status');
+        const uploadArea = document.getElementById('upload-area');
+        const feedbackContainer = document.getElementById('feedback-container');
+
+        uploadArea.addEventListener('click', () => {
+          fileUpload.click();
+        });
+
+        fileUpload.addEventListener('change', function (e) {
+            handleFileUpload(e.target.files[0]);
+        });
+
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#aaa';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#bbb';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#bbb';
+            handleFileUpload(e.dataTransfer.files[0]);
+        });
+
+        function handleFileUpload(file) {
+            if (!file || !file.type.startsWith('image/')) {
+                status.textContent = "❌ Invalid file type.";
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = function (e2) {
+                const image = document.createElement('img');
+                image.src = e2.target.result;
+                imageContainer.innerHTML = '';
+                imageContainer.appendChild(image);
+                detect(image);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        const detect = async (image) => {
+            status.textContent = "🔍 Analyzing visual content...";
+            try {
+                const detector = await pipeline("object-detection", "Xenova/detr-resnet-50");
+                const output = await detector(image.src, {
+                    threshold: 0.6,
+                    percentage: true
+                });
+                status.textContent = `✅ Analysis complete. Found ${output.length} object(s).`;
+                output.forEach(renderBox);
+                createFeedbackButtons();
+            } catch (error) {
+                status.textContent = "❌ Analysis error occurred.";
+                console.error(error);
+            }
+        };
+
+        function renderBox({ box, label, score }) {
+            const { xmin, ymin, xmax, ymax } = box;
+            const boxElement = document.createElement("div");
+            boxElement.className = "bounding-box";
+            Object.assign(boxElement.style, {
+                position: 'absolute',
+                left: (100 * xmin) + '%',
+                top: (100 * ymin) + '%',
+                width: (100 * (xmax - xmin)) + "%",
+                height: (100 * (ymax - ymin)) + "%"
+            });
+            const labelElement = document.createElement('span');
+            labelElement.textContent = `${label} (${Math.round(score * 100)}%)`;
+            labelElement.className = "bounding-box-label";
+            boxElement.appendChild(labelElement);
+            imageContainer.appendChild(boxElement);
+        }
+
+        function createFeedbackButtons() {
+            feedbackContainer.innerHTML = '';
+            const correctButton = document.createElement('button');
+            correctButton.textContent = 'Correct';
+            correctButton.addEventListener('click', () => captureFeedback('correct'));
+
+            const incorrectButton = document.createElement('button');
+            incorrectButton.textContent = 'Incorrect';
+            incorrectButton.addEventListener('click', () => captureFeedback('incorrect'));
+
+            feedbackContainer.appendChild(correctButton);
+            feedbackContainer.appendChild(incorrectButton);
+        }
+
+        function captureFeedback(feedback) {
+            const imageData = imageContainer.querySelector('img').src;
+            const feedbackData = {
+                image: imageData,
+                feedback: feedback,
+            };
+            console.log('Feedback:', feedbackData);
+            // Example using local storage:
+            const feedbackArray = JSON.parse(localStorage.getItem('feedback')) || [];
+            feedbackArray.push(feedbackData);
+            localStorage.setItem('feedback', JSON.stringify(feedbackArray));
+            alert("Feedback Submitted");
+            //send feedback to server here.
+        }
+    </script>
+   
+</body>
+</html>
